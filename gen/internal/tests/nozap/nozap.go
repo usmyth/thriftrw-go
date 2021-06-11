@@ -8,6 +8,7 @@ import (
 	json "encoding/json"
 	errors "errors"
 	fmt "fmt"
+	stream "go.uber.org/thriftrw/protocol/stream"
 	thriftreflect "go.uber.org/thriftrw/thriftreflect"
 	wire "go.uber.org/thriftrw/wire"
 	math "math"
@@ -105,6 +106,24 @@ func (v EnumDefault) ToWire() (wire.Value, error) {
 //   return v, nil
 func (v *EnumDefault) FromWire(w wire.Value) error {
 	*v = (EnumDefault)(w.GetI32())
+	return nil
+}
+
+// Decode reads off the encoded EnumDefault directly off of the wire.
+//
+//   sReader := BinaryStreamer.Reader(reader)
+//
+//   var v EnumDefault
+//   if err := v.Decode(sReader); err != nil {
+//     return EnumDefault(0), err
+//   }
+//   return v, nil
+func (v *EnumDefault) Decode(sr stream.Reader) error {
+	rVal, err := sr.ReadInt32()
+	if err != nil {
+		return err
+	}
+	*v = (EnumDefault)(rVal)
 	return nil
 }
 

@@ -69,6 +69,7 @@ func enum(g Generator, spec *compile.EnumSpec) error {
 		<$strconv := import "strconv">
 
 		<$wire := import "go.uber.org/thriftrw/wire">
+		<$stream := import "go.uber.org/thriftrw/protocol/stream">
 
 		<$enumName := goName .Spec>
 		<formatDoc .Spec.Doc>type <$enumName> int32
@@ -187,6 +188,26 @@ func enum(g Generator, spec *compile.EnumSpec) error {
 		//   return <$v>, nil
 		func (<$v> *<$enumName>) FromWire(<$w> <$wire>.Value) error {
 			*<$v> = (<$enumName>)(<$w>.GetI32());
+			return nil
+		}
+
+		<$sr := newVar "sr">
+		// Decode reads off the encoded <$enumName> directly off of the wire.
+		//
+		//   sReader := BinaryStreamer.Reader(reader)
+		//
+		//   var <$v> <$enumName>
+		//   if err := <$v>.Decode(sReader); err != nil {
+		//     return <$enumName>(0), err
+		//   }
+		//   return <$v>, nil
+		func (<$v> *<$enumName>) Decode(<$sr> <$stream>.Reader) error {
+			<- $rVal := newVar "rVal" ->
+			<$rVal>, err := <$sr>.ReadInt32()
+			if err != nil {
+				return err
+			}
+			*<$v> = (<$enumName>)(<$rVal>)
 			return nil
 		}
 

@@ -9,6 +9,7 @@ import (
 	fmt "fmt"
 	multierr "go.uber.org/multierr"
 	enums "go.uber.org/thriftrw/gen/internal/tests/enums"
+	stream "go.uber.org/thriftrw/protocol/stream"
 	thriftreflect "go.uber.org/thriftrw/thriftreflect"
 	wire "go.uber.org/thriftrw/wire"
 	zapcore "go.uber.org/zap/zapcore"
@@ -119,6 +120,24 @@ func (v RecordType) ToWire() (wire.Value, error) {
 //   return v, nil
 func (v *RecordType) FromWire(w wire.Value) error {
 	*v = (RecordType)(w.GetI32())
+	return nil
+}
+
+// Decode reads off the encoded RecordType directly off of the wire.
+//
+//   sReader := BinaryStreamer.Reader(reader)
+//
+//   var v RecordType
+//   if err := v.Decode(sReader); err != nil {
+//     return RecordType(0), err
+//   }
+//   return v, nil
+func (v *RecordType) Decode(sr stream.Reader) error {
+	rVal, err := sr.ReadInt32()
+	if err != nil {
+		return err
+	}
+	*v = (RecordType)(rVal)
 	return nil
 }
 

@@ -9,6 +9,7 @@ import (
 	errors "errors"
 	fmt "fmt"
 	multierr "go.uber.org/multierr"
+	stream "go.uber.org/thriftrw/protocol/stream"
 	thriftreflect "go.uber.org/thriftrw/thriftreflect"
 	wire "go.uber.org/thriftrw/wire"
 	zapcore "go.uber.org/zap/zapcore"
@@ -611,6 +612,24 @@ func (v MyEnum) ToWire() (wire.Value, error) {
 //   return v, nil
 func (v *MyEnum) FromWire(w wire.Value) error {
 	*v = (MyEnum)(w.GetI32())
+	return nil
+}
+
+// Decode reads off the encoded MyEnum directly off of the wire.
+//
+//   sReader := BinaryStreamer.Reader(reader)
+//
+//   var v MyEnum
+//   if err := v.Decode(sReader); err != nil {
+//     return MyEnum(0), err
+//   }
+//   return v, nil
+func (v *MyEnum) Decode(sr stream.Reader) error {
+	rVal, err := sr.ReadInt32()
+	if err != nil {
+		return err
+	}
+	*v = (MyEnum)(rVal)
 	return nil
 }
 
@@ -1823,6 +1842,24 @@ func (v MyEnum2) ToWire() (wire.Value, error) {
 //   return v, nil
 func (v *MyEnum2) FromWire(w wire.Value) error {
 	*v = (MyEnum2)(w.GetI32())
+	return nil
+}
+
+// Decode reads off the encoded MyEnum2 directly off of the wire.
+//
+//   sReader := BinaryStreamer.Reader(reader)
+//
+//   var v MyEnum2
+//   if err := v.Decode(sReader); err != nil {
+//     return MyEnum2(0), err
+//   }
+//   return v, nil
+func (v *MyEnum2) Decode(sr stream.Reader) error {
+	rVal, err := sr.ReadInt32()
+	if err != nil {
+		return err
+	}
+	*v = (MyEnum2)(rVal)
 	return nil
 }
 

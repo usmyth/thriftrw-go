@@ -28,6 +28,7 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	multierr "go.uber.org/multierr"
+	stream "go.uber.org/thriftrw/protocol/stream"
 	thriftreflect "go.uber.org/thriftrw/thriftreflect"
 	wire "go.uber.org/thriftrw/wire"
 	zapcore "go.uber.org/zap/zapcore"
@@ -215,6 +216,24 @@ func (v ExceptionType) ToWire() (wire.Value, error) {
 //   return v, nil
 func (v *ExceptionType) FromWire(w wire.Value) error {
 	*v = (ExceptionType)(w.GetI32())
+	return nil
+}
+
+// Decode reads off the encoded ExceptionType directly off of the wire.
+//
+//   sReader := BinaryStreamer.Reader(reader)
+//
+//   var v ExceptionType
+//   if err := v.Decode(sReader); err != nil {
+//     return ExceptionType(0), err
+//   }
+//   return v, nil
+func (v *ExceptionType) Decode(sr stream.Reader) error {
+	rVal, err := sr.ReadInt32()
+	if err != nil {
+		return err
+	}
+	*v = (ExceptionType)(rVal)
 	return nil
 }
 
