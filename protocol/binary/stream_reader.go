@@ -22,7 +22,6 @@ package binary
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
@@ -31,6 +30,34 @@ import (
 	"go.uber.org/thriftrw/protocol/stream"
 	"go.uber.org/thriftrw/wire"
 )
+
+// Requests for byte slices longer than this will use a dynamically resizing
+// buffer.
+const bytesAllocThreshold = 1048576 // 1 MB
+
+// For the reader, we keep track of the read offset manually everywhere so
+// that we can implement lazy collections without extra allocations
+
+// fixedWidth returns the encoded size of a value of the given type. If the
+// type's width depends on the value, -1 is returned.
+func fixedWidth(t wire.Type) int64 {
+	switch t {
+	case wire.TBool:
+		return 1
+	case wire.TI8:
+		return 1
+	case wire.TDouble:
+		return 8
+	case wire.TI16:
+		return 2
+	case wire.TI32:
+		return 4
+	case wire.TI64:
+		return 8
+	default:
+		return -1
+	}
+}
 
 // StreamReader provides an implementation of a "stream.Reader".
 type StreamReader struct {
@@ -83,7 +110,7 @@ func (sr *StreamReader) ReadBool() (bool, error) {
 	case 1:
 		return true, nil
 	default:
-		return false, fmt.Errorf("invalid bool value: %q", bs[0])
+		return false, decodeErrorf("invalid bool value: %q", bs[0])
 	}
 }
 
@@ -135,7 +162,7 @@ func (sr *StreamReader) ReadBinary() ([]byte, error) {
 	}
 
 	if length < 0 {
-		return nil, fmt.Errorf("negative length %v specified for binary field", length)
+		return nil, decodeErrorf("negative length %v specified for binary field", length)
 	}
 
 	if length == 0 {
@@ -257,7 +284,7 @@ func (sr *StreamReader) readTypeSizeHeader() (wire.Type, int, error) {
 	}
 
 	if size < 0 {
-		return wire.Type(0), 0, fmt.Errorf("got negative length: %v", size)
+		return wire.Type(0), 0, decodeErrorf("got negative length: %v", size)
 	}
 
 	return wire.Type(elemType), int(size), nil
@@ -283,7 +310,7 @@ func (sr *StreamReader) ReadMapBegin() (stream.MapHeader, error) {
 	}
 
 	if size < 0 {
-		return mh, fmt.Errorf("got negative length: %v", size)
+		return mh, decodeErrorf("got negative length: %v", size)
 	}
 
 	mh.KeyType = wire.Type(keyType)
@@ -313,7 +340,7 @@ func (sr *StreamReader) Skip(t wire.Type) error {
 		}
 
 		if length < 0 {
-			return fmt.Errorf("got negative length: %v", length)
+			return decodeErrorf("got negative length: %v", length)
 		}
 
 		return sr.discard(int64(length))
@@ -326,7 +353,7 @@ func (sr *StreamReader) Skip(t wire.Type) error {
 	case wire.TList:
 		return sr.skipList()
 	default:
-		return fmt.Errorf("unknown ttype %v", t)
+		return decodeErrorf("unknown ttype %v", t)
 	}
 }
 
@@ -371,7 +398,7 @@ func (sr *StreamReader) skipMap() error {
 	}
 
 	if size < 0 {
-		return fmt.Errorf("got negative length: %v", size)
+		return decodeErrorf("got negative length: %v", size)
 	}
 
 	key := wire.Type(keyRaw)
