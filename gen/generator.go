@@ -127,6 +127,7 @@ type generator struct {
 	ImportPath  string
 
 	w              WireGenerator
+	s              StreamGenerator
 	e              equalsGenerator
 	z              zapGenerator
 	noZap          bool
@@ -235,6 +236,8 @@ func (g *generator) TextTemplate(s string, data interface{}, opts ...TemplateOpt
 		"fromWirePtr":      curryGenerator(g.w.FromWirePtr, g),
 		"toWire":           curryGenerator(g.w.ToWire, g),
 		"toWirePtr":        curryGenerator(g.w.ToWirePtr, g),
+		"decode":           curryGenerator(g.s.Decode, g),
+		"decodePtr":        curryGenerator(g.s.DecodePtr, g),
 		"typeCode":         curryGenerator(TypeCode, g),
 		"equals":           curryGenerator(g.e.Equals, g),
 		"equalsPtr":        curryGenerator(g.e.EqualsPtr, g),

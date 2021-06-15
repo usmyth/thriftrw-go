@@ -8,6 +8,7 @@ import (
 	fmt "fmt"
 	multierr "go.uber.org/multierr"
 	typedefs "go.uber.org/thriftrw/gen/internal/tests/typedefs"
+	stream "go.uber.org/thriftrw/protocol/stream"
 	thriftreflect "go.uber.org/thriftrw/thriftreflect"
 	wire "go.uber.org/thriftrw/wire"
 	zapcore "go.uber.org/zap/zapcore"
@@ -290,6 +291,182 @@ func (v *ArbitraryValue) FromWire(w wire.Value) error {
 
 			}
 		}
+	}
+
+	count := 0
+	if v.BoolValue != nil {
+		count++
+	}
+	if v.Int64Value != nil {
+		count++
+	}
+	if v.StringValue != nil {
+		count++
+	}
+	if v.ListValue != nil {
+		count++
+	}
+	if v.MapValue != nil {
+		count++
+	}
+	if count != 1 {
+		return fmt.Errorf("ArbitraryValue should have exactly one field: got %v fields", count)
+	}
+
+	return nil
+}
+
+func _ArbitraryValue_Decode(sr stream.Reader) (*ArbitraryValue, error) {
+	var v ArbitraryValue
+	err := v.Decode(sr)
+	return &v, err
+}
+
+func _List_ArbitraryValue_Decode(sr stream.Reader) ([]*ArbitraryValue, error) {
+	lh, err := sr.ReadListBegin()
+	if err != nil {
+		return nil, err
+	}
+
+	if lh.Type != wire.TStruct {
+		for i := 0; i < lh.Length; i++ {
+			if err := sr.Skip(lh.Type); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	o := make([]*ArbitraryValue, 0, lh.Length)
+	for i := 0; i < lh.Length; i++ {
+		v, err := _ArbitraryValue_Decode(sr)
+		if err != nil {
+			return nil, err
+		}
+		o = append(o, v)
+	}
+
+	if err = sr.ReadListEnd(); err != nil {
+		return nil, err
+	}
+	return o, err
+}
+
+func _Map_String_ArbitraryValue_Decode(sr stream.Reader) (map[string]*ArbitraryValue, error) {
+	mh, err := sr.ReadMapBegin()
+	if err != nil {
+		return nil, err
+	}
+
+	if mh.KeyType != wire.TBinary || mh.ValueType != wire.TStruct {
+		for i := 0; i < mh.Length; i++ {
+			if err := sr.Skip(mh.KeyType); err != nil {
+				return nil, err
+			}
+
+			if err := sr.Skip(mh.ValueType); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	o := make(map[string]*ArbitraryValue, mh.Length)
+	for i := 0; i < mh.Length; i++ {
+		k, err := sr.ReadString()
+		if err != nil {
+			return nil, err
+		}
+
+		v, err := _ArbitraryValue_Decode(sr)
+		if err != nil {
+			return nil, err
+		}
+
+		o[k] = v
+	}
+
+	if err = sr.ReadMapEnd(); err != nil {
+		return nil, err
+	}
+	return o, err
+}
+
+// Decode deserializes a ArbitraryValue struct directly from its Thrift-level
+// representation, without going through an intemediary type.
+//
+// An error is returned if a ArbitraryValue struct could not be generated from the wire
+// representation.
+func (v *ArbitraryValue) Decode(sr stream.Reader) error {
+
+	if err := sr.ReadStructBegin(); err != nil {
+		return err
+	}
+
+	fh, ok, err := sr.ReadFieldBegin()
+	if err != nil {
+		return err
+	}
+
+	for ok {
+		switch fh.ID {
+		case 1:
+			if fh.Type == wire.TBool {
+				var x bool
+				x, err = sr.ReadBool()
+				v.BoolValue = &x
+				if err != nil {
+					return err
+				}
+
+			}
+		case 2:
+			if fh.Type == wire.TI64 {
+				var x int64
+				x, err = sr.ReadInt64()
+				v.Int64Value = &x
+				if err != nil {
+					return err
+				}
+
+			}
+		case 3:
+			if fh.Type == wire.TBinary {
+				var x string
+				x, err = sr.ReadString()
+				v.StringValue = &x
+				if err != nil {
+					return err
+				}
+
+			}
+		case 4:
+			if fh.Type == wire.TList {
+				v.ListValue, err = _List_ArbitraryValue_Decode(sr)
+				if err != nil {
+					return err
+				}
+
+			}
+		case 5:
+			if fh.Type == wire.TMap {
+				v.MapValue, err = _Map_String_ArbitraryValue_Decode(sr)
+				if err != nil {
+					return err
+				}
+
+			}
+		}
+
+		if err := sr.ReadFieldEnd(); err != nil {
+			return err
+		}
+
+		if fh, ok, err = sr.ReadFieldBegin(); err != nil {
+			return err
+		}
+	}
+
+	if err := sr.ReadStructEnd(); err != nil {
+		return err
 	}
 
 	count := 0
@@ -675,6 +852,77 @@ func (v *Document) FromWire(w wire.Value) error {
 	return nil
 }
 
+func _PDF_Decode(sr stream.Reader) (typedefs.PDF, error) {
+	var x typedefs.PDF
+	err := x.Decode(sr)
+	return x, err
+}
+
+// Decode deserializes a Document struct directly from its Thrift-level
+// representation, without going through an intemediary type.
+//
+// An error is returned if a Document struct could not be generated from the wire
+// representation.
+func (v *Document) Decode(sr stream.Reader) error {
+
+	if err := sr.ReadStructBegin(); err != nil {
+		return err
+	}
+
+	fh, ok, err := sr.ReadFieldBegin()
+	if err != nil {
+		return err
+	}
+
+	for ok {
+		switch fh.ID {
+		case 1:
+			if fh.Type == wire.TBinary {
+				v.Pdf, err = _PDF_Decode(sr)
+				if err != nil {
+					return err
+				}
+
+			}
+		case 2:
+			if fh.Type == wire.TBinary {
+				var x string
+				x, err = sr.ReadString()
+				v.PlainText = &x
+				if err != nil {
+					return err
+				}
+
+			}
+		}
+
+		if err := sr.ReadFieldEnd(); err != nil {
+			return err
+		}
+
+		if fh, ok, err = sr.ReadFieldBegin(); err != nil {
+			return err
+		}
+	}
+
+	if err := sr.ReadStructEnd(); err != nil {
+		return err
+	}
+
+	count := 0
+	if v.Pdf != nil {
+		count++
+	}
+	if v.PlainText != nil {
+		count++
+	}
+	if count != 1 {
+		return fmt.Errorf("Document should have exactly one field: got %v fields", count)
+	}
+
+	return nil
+}
+
 // String returns a readable string representation of a Document
 // struct.
 func (v *Document) String() string {
@@ -810,6 +1058,42 @@ func (v *EmptyUnion) FromWire(w wire.Value) error {
 	for _, field := range w.GetStruct().Fields {
 		switch field.ID {
 		}
+	}
+
+	return nil
+}
+
+// Decode deserializes a EmptyUnion struct directly from its Thrift-level
+// representation, without going through an intemediary type.
+//
+// An error is returned if a EmptyUnion struct could not be generated from the wire
+// representation.
+func (v *EmptyUnion) Decode(sr stream.Reader) error {
+
+	if err := sr.ReadStructBegin(); err != nil {
+		return err
+	}
+
+	fh, ok, err := sr.ReadFieldBegin()
+	if err != nil {
+		return err
+	}
+
+	for ok {
+		switch fh.ID {
+		}
+
+		if err := sr.ReadFieldEnd(); err != nil {
+			return err
+		}
+
+		if fh, ok, err = sr.ReadFieldBegin(); err != nil {
+			return err
+		}
+	}
+
+	if err := sr.ReadStructEnd(); err != nil {
+		return err
 	}
 
 	return nil

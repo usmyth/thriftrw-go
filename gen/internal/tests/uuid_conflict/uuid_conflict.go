@@ -8,6 +8,7 @@ import (
 	fmt "fmt"
 	multierr "go.uber.org/multierr"
 	typedefs "go.uber.org/thriftrw/gen/internal/tests/typedefs"
+	stream "go.uber.org/thriftrw/protocol/stream"
 	thriftreflect "go.uber.org/thriftrw/thriftreflect"
 	wire "go.uber.org/thriftrw/wire"
 	zapcore "go.uber.org/zap/zapcore"
@@ -40,6 +41,13 @@ func (v UUID) String() string {
 // from a ThriftRW protocol implementation.
 func (v *UUID) FromWire(w wire.Value) error {
 	x, err := w.GetString(), error(nil)
+	*v = (UUID)(x)
+	return err
+}
+
+// Decode deserializes UUID directly off the wire.
+func (v *UUID) Decode(sr stream.Reader) error {
+	x, err := sr.ReadString()
 	*v = (UUID)(x)
 	return err
 }
@@ -151,6 +159,81 @@ func (v *UUIDConflict) FromWire(w wire.Value) error {
 				importedUUIDIsSet = true
 			}
 		}
+	}
+
+	if !localUUIDIsSet {
+		return errors.New("field LocalUUID of UUIDConflict is required")
+	}
+
+	if !importedUUIDIsSet {
+		return errors.New("field ImportedUUID of UUIDConflict is required")
+	}
+
+	return nil
+}
+
+func _UUID_Decode(sr stream.Reader) (UUID, error) {
+	var x UUID
+	err := x.Decode(sr)
+	return x, err
+}
+
+func _UUID_1_Decode(sr stream.Reader) (*typedefs.UUID, error) {
+	var x typedefs.UUID
+	err := x.Decode(sr)
+	return &x, err
+}
+
+// Decode deserializes a UUIDConflict struct directly from its Thrift-level
+// representation, without going through an intemediary type.
+//
+// An error is returned if a UUIDConflict struct could not be generated from the wire
+// representation.
+func (v *UUIDConflict) Decode(sr stream.Reader) error {
+
+	localUUIDIsSet := false
+	importedUUIDIsSet := false
+
+	if err := sr.ReadStructBegin(); err != nil {
+		return err
+	}
+
+	fh, ok, err := sr.ReadFieldBegin()
+	if err != nil {
+		return err
+	}
+
+	for ok {
+		switch fh.ID {
+		case 1:
+			if fh.Type == wire.TBinary {
+				v.LocalUUID, err = _UUID_Decode(sr)
+				if err != nil {
+					return err
+				}
+				localUUIDIsSet = true
+			}
+		case 2:
+			if fh.Type == wire.TStruct {
+				v.ImportedUUID, err = _UUID_1_Decode(sr)
+				if err != nil {
+					return err
+				}
+				importedUUIDIsSet = true
+			}
+		}
+
+		if err := sr.ReadFieldEnd(); err != nil {
+			return err
+		}
+
+		if fh, ok, err = sr.ReadFieldBegin(); err != nil {
+			return err
+		}
+	}
+
+	if err := sr.ReadStructEnd(); err != nil {
+		return err
 	}
 
 	if !localUUIDIsSet {

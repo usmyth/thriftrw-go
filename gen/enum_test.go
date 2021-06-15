@@ -108,7 +108,8 @@ func TestEnumDefaultWire(t *testing.T) {
 
 	for _, tt := range tests {
 		assertRoundTrip(t, &tt.e, tt.v, "EnumDefault")
-		assertStreamingRoundTrip(t, &tt.e, tt.v, "EnumDefault")
+
+		testRoundTripCombos(t, &tt.e, tt.v, "EnumDefault")
 	}
 }
 
@@ -155,7 +156,8 @@ func TestEnumWithDuplicateValuesWire(t *testing.T) {
 
 	for _, tt := range tests {
 		assertRoundTrip(t, &tt.e, tt.v, "EnumWithDuplicateValues")
-		assertStreamingRoundTrip(t, &tt.e, tt.v, "EnumWithDuplicateValues")
+
+		testRoundTripCombos(t, &tt.e, tt.v, "EnumWithDuplicateValues")
 	}
 }
 
@@ -187,6 +189,7 @@ func TestOptionalEnum(t *testing.T) {
 
 	for _, tt := range tests {
 		assertRoundTrip(t, &tt.s, tt.v, "StructWithOptionalEnum")
+		testRoundTripCombos(t, &tt.s, tt.v, "StructWithOptionalEnum")
 	}
 }
 
@@ -498,9 +501,9 @@ func TestEnumLabelValid(t *testing.T) {
 			t.Run("wire", func(t *testing.T) {
 				assertRoundTrip(t, &tt.item, wire.NewValueI32(int32(tt.item)),
 					"%v", tt.item)
-				assertStreamingRoundTrip(t, &tt.item, wire.NewValueI32(int32(tt.item)),
-					"%v", tt.item)
 
+				testRoundTripCombos(t, &tt.item, wire.NewValueI32(int32(tt.item)),
+					tt.item.String())
 			})
 		})
 	}
