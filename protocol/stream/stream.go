@@ -95,6 +95,11 @@ type Writer interface {
 	WriteSetEnd() error
 	WriteListBegin(l ListHeader) error
 	WriteListEnd() error
+
+	WriteEnvelopeBegin(eh EnvelopeHeader) error
+	WriteEnvelopeEnd() error
+	WriteLegacyEnvelopeBegin(eh EnvelopeHeader) error
+	WriteLegacyEnvelopeEnd() error
 }
 
 // Reader defines an decoder for a Thrift value, implemented in a streaming
@@ -123,4 +128,7 @@ type Reader interface {
 
 	// Skip skips over the bytes of the wire type and any applicable headers.
 	Skip(w wire.Type) error
+
+	ReadEnvelopeBegin() (EnvelopeHeader, error)
+	ReadEnvelopeEnd() error
 }
