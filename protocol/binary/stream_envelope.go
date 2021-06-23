@@ -22,6 +22,7 @@ package binary
 
 import (
 	"fmt"
+	"io"
 
 	"go.uber.org/thriftrw/protocol/stream"
 	"go.uber.org/thriftrw/wire"
@@ -138,4 +139,30 @@ func (sw *StreamReader) readStrictEnvelope(ver int32) (stream.EnvelopeHeader, er
 // envelope end, this is a no-op.
 func (sw *StreamReader) ReadEnvelopeEnd() error {
 	return nil
+}
+
+type noEnvelopeStreamResponder struct{}
+
+var NoEnvelopeStreamResponder stream.Responder = &noEnvelopeStreamResponder{}
+
+func (noEnvelopeStreamResponder) WriteResponse(et wire.EnvelopeType, w io.Writer) (stream.Writer, error) {
+	panic("not yet implemented")
+}
+
+type EnvelopeV0StreamResponder struct {
+	Name  string
+	SeqID int32
+}
+
+func (EnvelopeV0StreamResponder) WriteResponse(et wire.EnvelopeType, w io.Writer) (stream.Writer, error) {
+	panic("not yet implemented")
+}
+
+type EnvelopeV1StreamResponder struct {
+	Name  string
+	SeqID int32
+}
+
+func (EnvelopeV1StreamResponder) WriteResponse(et wire.EnvelopeType, w io.Writer) (stream.Writer, error) {
+	panic("not yet implemented")
 }

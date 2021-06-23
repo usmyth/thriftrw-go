@@ -21,6 +21,7 @@
 package protocol
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
@@ -101,6 +102,10 @@ var BinaryStreamer stream.Protocol
 //      an invalid request.
 var EnvelopeAgnosticBinary EnvelopeAgnosticProtocol
 
+// EnvelopeAgnosticBinaryStreamer is the streaming equivalent of an
+// EnvelopeAgnosticBinary.
+var EnvelopeAgnosticBinaryStreamer stream.EnvelopeAgnosticProtocol
+
 type errUnexpectedEnvelopeType wire.EnvelopeType
 
 func (e errUnexpectedEnvelopeType) Error() string {
@@ -111,6 +116,7 @@ func init() {
 	Binary = binaryProtocol{}
 	BinaryStreamer = binaryProtocol{}
 	EnvelopeAgnosticBinary = binaryProtocol{}
+	EnvelopeAgnosticBinaryStreamer = binaryProtocol{}
 }
 
 type binaryProtocol struct {
@@ -229,6 +235,59 @@ func (b binaryProtocol) DecodeRequest(et wire.EnvelopeType, r io.ReaderAt) (wire
 	// identifiers, outside the 0-15 range.
 	val, err := b.Decode(r, wire.TStruct)
 	return val, NoEnvelopeResponder, err
+}
+
+// ReadRequest reads off an expected request type through reading the envelope.
+// This returns a "reset" stream.Reader that should be used to continue the
+// reads as some bytes were read off to detect enveloping.
+//
+// Compared to `DecodeRequest`,
+func (b binaryProtocol) ReadRequest(et wire.EnvelopeType, r io.Reader) (stream.Reader, stream.Responder, error) {
+	var buf [2]byte
+
+	if count, _ := r.Read(buf[0:2]); count < 2 {
+		return b.Reader(bytes.NewReader(buf[:])), binary.NoEnvelopeStreamResponder, nil
+	}
+
+	// reset the Reader to properly read out the enveloping, if it exists;
+	// also, use a TeeReader to make sure that if there is no enveloping, we can
+	// reset it again.
+	var teeBuf bytes.Buffer
+	resetReader := io.MultiReader(bytes.NewReader(buf[:]), r)
+	teeReader := io.TeeReader(resetReader, &teeBuf)
+	sr := b.Reader(teeReader)
+
+	eh, err := sr.ReadEnvelopeBegin()
+	if err != nil {
+		return sr, binary.NoEnvelopeStreamResponder, err
+	}
+	if eh.Type != et {
+		return sr, binary.NoEnvelopeStreamResponder, errUnexpectedEnvelopeType(eh.Type)
+	}
+
+	if err := sr.ReadEnvelopeEnd(); err != nil {
+		return sr, binary.NoEnvelopeStreamResponder, err
+	}
+
+	if buf[0] == 0x00 {
+		return sr, &binary.EnvelopeV0StreamResponder{
+			Name:  eh.Name,
+			SeqID: eh.SeqID,
+		}, nil
+	}
+
+	if buf[0]&0x80 > 0 {
+		return sr, &binary.EnvelopeV0StreamResponder{
+			Name:  eh.Name,
+			SeqID: eh.SeqID,
+		}, nil
+	}
+
+	// For anything else, the request is either not-enveloped or invalid, let the
+	// caller manage that data
+	noEnvReader := io.MultiReader(&teeBuf, resetReader)
+	noEnvSr := b.Reader(noEnvReader)
+	return noEnvSr, binary.NoEnvelopeStreamResponder, nil
 }
 
 // noEnvelopeResponder responds to a request without an envelope.
