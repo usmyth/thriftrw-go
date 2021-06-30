@@ -1485,6 +1485,196 @@ func TestBinaryEnvelopeSuccessful(t *testing.T) {
 	}
 }
 
+func TestStreamEnvelopeErrors(t *testing.T) {
+	tests := []struct {
+		inputEnvType  wire.EnvelopeType
+		inputReqBytes []byte
+		errMsg        string
+	}{
+		{
+			inputEnvType: wire.OneWay,
+			inputReqBytes: []byte{
+				// envelope
+				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
+				0x03,                   // type:1 = Exception
+				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+
+				// request
+			},
+			errMsg: "unexpected envelope type",
+		},
+		{
+			inputEnvType: wire.Call,
+			inputReqBytes: []byte{
+				// envelope
+				0x80, 0x02, 0x00, 0x01, // version|type:4 = 2 | call
+				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
+				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+
+				// request
+			},
+			errMsg: "cannot decode envelope of version",
+		},
+		{
+			inputEnvType: wire.Call,
+			inputReqBytes: []byte{
+				// envelope
+				0x80, 0x02, 0x00, 0x01, // version|type:4 = 2 | call
+				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
+				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+
+				// request
+			},
+			errMsg: "cannot decode envelope of version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.errMsg, func(t *testing.T) {
+			_, responder, err := EnvelopeAgnosticBinaryStreamer.ReadRequestEnvelope(tt.inputEnvType, bytes.NewReader(tt.inputReqBytes))
+			require.Error(t, err, "ReadRequestEnvelope should fail")
+			require.Equal(t, binary.NoEnvelopeStreamResponder, responder, "ReadRequestEnvelope should fail with noEnvelopeResponder")
+			assert.Contains(t, err.Error(), tt.errMsg, "ReadRequestEnvelope should fail with error message")
+		})
+	}
+}
+
+func TestStreamEnvelopeSuccessful(t *testing.T) {
+	tests := []struct {
+		msg               string
+		inputReqBytes     []byte
+		inputEnvType      wire.EnvelopeType
+		wantReqValue      wire.Value
+		wantResponderType reflect.Type
+		wantResBytes      []byte
+	}{
+		{
+			msg:          "no envelope",
+			inputEnvType: wire.OneWay,
+			inputReqBytes: []byte{
+				// envelope
+
+				// request
+				// <struct>
+				0x0B,       // ttype:1 = BINARY
+				0x00, 0x01, // id:2 = 1
+				0x00, 0x00, 0x00, 0x05, // length:4 = 5
+				0x68, 0x65, 0x6c, 0x6c, 0x6f, // 'hello'
+				0x00, // stop
+			},
+			wantReqValue: vbinary("hello"),
+			wantResponderType: reflect.TypeOf(binary.NoEnvelopeStreamResponder),
+		},
+		{
+			msg:          "non-strict envelope, envelope type OneWay",
+			inputEnvType: wire.OneWay,
+			inputReqBytes: []byte{
+				// envelope
+				0x00, 0x00, 0x00, 0x05, // length:4 = 5
+				0x77, 0x72, 0x69, 0x74, 0x65, // 'write'
+				0x04,                   // type:1 = OneWay
+				0x00, 0x00, 0x00, 0x2a, // seqid:4 = 42
+
+				// request
+				// <struct>
+				0x0B,       // ttype:1 = BINARY
+				0x00, 0x01, // id:2 = 1
+				0x00, 0x00, 0x00, 0x05, // length:4 = 5
+				0x68, 0x65, 0x6c, 0x6c, 0x6f, // 'hello'
+				0x00, // stop
+			},
+			wantReqValue: vbinary("hello"),
+			wantResponderType: reflect.TypeOf((*binary.EnvelopeV0StreamResponder)(nil)),
+			wantResBytes: []byte{
+				// envelope
+				0x00, 0x00, 0x00, 0x05, // length:4 = 5
+				0x77, 0x72, 0x69, 0x74, 0x65, // 'write'
+				0x04,                   // type:1 = OneWay
+				0x00, 0x00, 0x00, 0x2a, // seqid:4 = 42
+
+				// response
+			},
+		},
+		{
+			msg:          "strict envelope, envelope type Call",
+			inputEnvType: wire.Call,
+			inputReqBytes: []byte{
+				// envelope
+				0x80, 0x01, 0x00, 0x01, // version|type:4 = 1 | call
+				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
+				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+
+				// request
+				// <struct>
+				0x0B,       // ttype:1 = BINARY
+				0x00, 0x01, // id:2 = 1
+				0x00, 0x00, 0x00, 0x05, // length:4 = 5
+				0x68, 0x65, 0x6c, 0x6c, 0x6f, // 'hello'
+				0x00, // stop
+			},
+			wantReqValue: vbinary("hello"),
+			wantResponderType: reflect.TypeOf((*binary.EnvelopeV1StreamResponder)(nil)),
+			wantResBytes: []byte{
+				// envelope
+				0x80, 0x01, 0x00, 0x01, // version|type:4 = 1 | call
+				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
+				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+
+				// response
+			},
+		},
+		{
+			msg:          "non-strict envelope, type Exception",
+			inputEnvType: wire.Exception,
+			inputReqBytes: []byte{
+				// envelope
+				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
+				0x03,                   // type:1 = Exception
+				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+
+				// request
+				// <struct>
+				0x0B,       // ttype:1 = BINARY
+				0x00, 0x01, // id:2 = 1
+				0x00, 0x00, 0x00, 0x05, // length:4 = 5
+				0x68, 0x65, 0x6c, 0x6c, 0x6f, // 'hello'
+				0x00, // stop
+			},
+			wantReqValue: vbinary("hello"),
+			wantResponderType: reflect.TypeOf((*binary.EnvelopeV0StreamResponder)(nil)),
+			wantResBytes: []byte{
+				// envelope
+				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
+				0x03,                   // type:1 = Exception
+				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+
+				// response
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			// Verify whether we can infer the presence of the envelope
+			// reliably when reading a request.
+			reader, responder, err := EnvelopeAgnosticBinaryStreamer.ReadRequestEnvelope(tt.inputEnvType, bytes.NewReader(tt.inputReqBytes))
+			require.NoError(t, err, "failed to read request with envelope")
+			require.True(t, tt.wantResponderType == reflect.TypeOf(responder), "read request should have responder want %v got %T", tt.wantResponderType, responder)
+
+			// Verify whether we can read from the request body
+			val, err := reader.ReadBinary()
+			require.NoError(t, err, "failed to read request field")
+			require.Equal(t, tt.wantReqValue.GetBinary(), val, "decoded request field bytes mismatch")
+
+			// Verify response has the correct envelope
+			writer := &bytes.Buffer{}
+			_, err = responder.WriteResponseEnvelope(tt.inputEnvType, writer)
+			require.NoError(t, err, "failed to write response with envelope")
+			assert.Equal(t, tt.wantResBytes, writer.Bytes(), "encoded response envelope bytes mismatch")
+		})
+	}
+}
+
 func tbinary(v wire.Value) []byte {
 	buf := &bytes.Buffer{}
 	Binary.Encode(v, buf)
