@@ -48,3 +48,13 @@ type streamingThriftType interface {
 	Encode(stream.Writer) error
 	Decode(stream.Reader) error
 }
+
+// streamingThriftTypeEnveloper is implemented by all generated types that know how to
+// write and read themselves with enveloping to the Thrift Protocol, skipping over the
+// intermediary wire.Type
+type streamingThriftTypeEnveloper interface {
+	streamingThriftType
+
+	MethodName() string
+	EnvelopeType() wire.EnvelopeType
+}

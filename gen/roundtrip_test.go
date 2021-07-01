@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/thriftrw/protocol"
 	"go.uber.org/thriftrw/protocol/binary"
+	"go.uber.org/thriftrw/protocol/stream"
 	"go.uber.org/thriftrw/wire"
 )
 
@@ -138,4 +139,113 @@ func testRoundTripCombos(t *testing.T, x thriftType, v wire.Value, msg string) {
 			}
 		})
 	}
+}
+
+func testRoundTripEnvelopeCombos(t *testing.T, x streamingThriftTypeEnveloper, msg string)  {
+	t.Helper()
+
+	useStreaming := []struct {
+		encode bool
+		decode bool
+	}{
+		{false, false},
+		{false, true},
+		{true, false},
+		{true, true},
+	}
+
+	for _, streaming := range useStreaming {
+		testName := fmt.Sprintf("%s: stream-encode-envelope: %v, stream-decode-envelope: %v",
+			msg, streaming.encode, streaming.decode)
+
+		t.Run(testName, func(t *testing.T) {
+			var encoded []byte
+
+			if streaming.encode {
+				encoded = testStreamingEncodeEnveloped(t, x)
+			} else {
+				encoded = testBinaryEncodeEnveloped(t, x)
+			}
+
+			if streaming.decode {
+				gotX := testStreamingDecodeEnveloped(t, x, encoded)
+				assert.Equal(t, x, gotX)
+			} else {
+				gotX := testBinaryDecodeEnveloped(t, x, encoded)
+				assert.Equal(t, x, gotX)
+			}
+		})
+	}
+}
+
+func testBinaryEncodeEnveloped(t *testing.T, x streamingThriftTypeEnveloper) []byte {
+	var buff bytes.Buffer
+
+	value, err := x.ToWire()
+	require.NoError(t, err, "failed to ToWire")
+
+	// envelope + encode
+	err = protocol.Binary.EncodeEnveloped(wire.Envelope{
+		Name:  x.MethodName(),
+		Type:  x.EnvelopeType(),
+		SeqID: 1, // don't care
+		Value: value,
+	}, &buff)
+	require.NoError(t, err, "failed to EncodeEnveloped")
+
+	return buff.Bytes()
+}
+
+func testBinaryDecodeEnveloped(t *testing.T, x streamingThriftTypeEnveloper, encoded []byte) streamingThriftTypeEnveloper {
+	// envelope + decode
+	env, err := protocol.Binary.DecodeEnveloped(bytes.NewReader(encoded))
+	require.NoError(t, err, "failed to DecodeEnveloped")
+	require.NotNil(t, env)
+
+	// read envelope wire.Value into a new streamingThriftTypeEnveloper value
+	xType := reflect.TypeOf(x).Elem()
+	gotX, ok := reflect.New(xType).Interface().(streamingThriftTypeEnveloper)
+	require.True(t, ok)
+	require.NoError(t, gotX.FromWire(env.Value), "failed to FromWire")
+
+	return gotX
+}
+
+func testStreamingEncodeEnveloped(t *testing.T, x streamingThriftTypeEnveloper) []byte {
+	var buff bytes.Buffer
+	w := binary.BorrowStreamWriter(&buff)
+
+	// envelope
+	err := w.WriteEnvelopeBegin(stream.EnvelopeHeader{
+		Name:  x.MethodName(),
+		Type:  x.EnvelopeType(),
+		SeqID: 1, // don't care
+	})
+	require.NoError(t, err, "failed to WriteEnvelopeBegin")
+	require.NoError(t, w.WriteEnvelopeEnd(), "failed to WriteEnvelopeEnd")
+
+	// encode value into writer
+	require.NoError(t, x.Encode(w), "failed to Encode")
+
+	// close
+	require.NoError(t, w.Close())
+	return buff.Bytes()
+}
+
+func testStreamingDecodeEnveloped(t *testing.T, x streamingThriftTypeEnveloper, encoded []byte) streamingThriftTypeEnveloper {
+	r := protocol.BinaryStreamer.Reader(bytes.NewReader(encoded))
+
+	// envelope
+	eh, err := r.ReadEnvelopeBegin()
+	require.NoError(t, err, "failed to ReadEnvelopeBegin")
+	require.NotNil(t, eh)
+	require.NoError(t, r.ReadEnvelopeEnd(), "failed to ReadEnvelopeEnd")
+
+	// decode into a new streamingThriftTypeEnveloper value
+	xType := reflect.TypeOf(x).Elem()
+	gotX, ok := reflect.New(xType).Interface().(streamingThriftTypeEnveloper)
+	require.True(t, ok)
+	require.NoError(t, gotX.Decode(r), "failed to Decode")
+
+	return gotX
 }

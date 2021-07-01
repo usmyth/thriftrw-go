@@ -556,6 +556,10 @@ func TestServiceTypesEnveloper(t *testing.T) {
 		if assert.NoError(t, err, "Error serializing %v", tt.s) {
 			assert.Equal(t, expected, envelope, "Envelope mismatch for %v", tt)
 		}
+
+		x, ok := tt.s.(streamingThriftTypeEnveloper)
+		require.True(t, ok)
+		testRoundTripEnvelopeCombos(t, x, tt.wantEnvelope.Name)
 	}
 }
 
