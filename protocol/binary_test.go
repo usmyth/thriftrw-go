@@ -35,6 +35,30 @@ import (
 	"go.uber.org/thriftrw/wire"
 )
 
+var (
+	_testNonStrictEnvelopeOneWayBytes = []byte{
+		// envelope
+		0x00, 0x00, 0x00, 0x05, // length:4 = 5
+		0x77, 0x72, 0x69, 0x74, 0x65, // 'write'
+		0x04,                   // type:1 = OneWay
+		0x00, 0x00, 0x00, 0x2a, // seqid:4 = 42
+	}
+
+	_testNonStrictEnvelopeExceptionBytes = []byte{
+		// envelope
+		0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
+		0x03,                   // type:1 = Exception
+		0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+	}
+
+	_testStrictEnvelopeCallBytes = []byte{
+		// envelope
+		0x80, 0x01, 0x00, 0x01, // version|type:4 = 1 | call
+		0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
+		0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+	}
+)
+
 type encodeDecodeTest struct {
 	msg     string
 	value   wire.Value
@@ -75,6 +99,16 @@ func getStreamReader(t *testing.T, encoded []byte) stream.Reader {
 	t.Helper()
 
 	return BinaryStreamer.Reader(bytes.NewReader(encoded))
+}
+
+func readStructFieldID(t *testing.T, r stream.Reader) int16 {
+	require.NoError(t, r.ReadStructBegin(), "failed to read struct begin")
+	fh, ok, err := r.ReadFieldBegin()
+	require.NoError(t, err, "failed to read field begin")
+	require.True(t, ok, "failed to read field begin")
+	require.NoError(t, r.ReadFieldEnd(), "failed to read field end")
+	require.NoError(t, r.ReadStructEnd(), "failed to read struct end")
+	return fh.ID
 }
 
 type failureTest struct {
@@ -1485,7 +1519,7 @@ func TestBinaryEnvelopeSuccessful(t *testing.T) {
 	}
 }
 
-func TestStreamEnvelopeErrors(t *testing.T) {
+func TestStreamingEnvelopeErrors(t *testing.T) {
 	tests := []struct {
 		inputEnvType  wire.EnvelopeType
 		inputReqBytes []byte
@@ -1539,117 +1573,82 @@ func TestStreamEnvelopeErrors(t *testing.T) {
 	}
 }
 
-func TestStreamEnvelopeSuccessful(t *testing.T) {
+func TestStreamingEnvelopeSuccessful(t *testing.T) {
 	tests := []struct {
 		msg               string
 		inputReqBytes     []byte
 		inputEnvType      wire.EnvelopeType
-		wantReqValue      wire.Value
+		wantReqFieldID    int16
 		wantResponderType reflect.Type
 		wantResBytes      []byte
 	}{
 		{
-			msg:          "no envelope",
-			inputEnvType: wire.OneWay,
-			inputReqBytes: []byte{
-				// envelope
-
-				// request
-				// <struct>
-				0x0B,       // ttype:1 = BINARY
-				0x00, 0x01, // id:2 = 1
-				0x00, 0x00, 0x00, 0x05, // length:4 = 5
-				0x68, 0x65, 0x6c, 0x6c, 0x6f, // 'hello'
-				0x00, // stop
-			},
-			wantReqValue: vbinary("hello"),
+			msg:               "no envelope",
+			inputEnvType:      wire.OneWay,
+			inputReqBytes:     tbinary(vstruct(vfield(1, vbinary("hello")))),
+			wantReqFieldID:    1,
 			wantResponderType: reflect.TypeOf(binary.NoEnvelopeStreamResponder),
+			wantResBytes: 	   tbinary(vstruct()),
 		},
 		{
 			msg:          "non-strict envelope, envelope type OneWay",
 			inputEnvType: wire.OneWay,
-			inputReqBytes: []byte{
+			inputReqBytes: append(
 				// envelope
-				0x00, 0x00, 0x00, 0x05, // length:4 = 5
-				0x77, 0x72, 0x69, 0x74, 0x65, // 'write'
-				0x04,                   // type:1 = OneWay
-				0x00, 0x00, 0x00, 0x2a, // seqid:4 = 42
+				_testNonStrictEnvelopeOneWayBytes,
 
 				// request
-				// <struct>
-				0x0B,       // ttype:1 = BINARY
-				0x00, 0x01, // id:2 = 1
-				0x00, 0x00, 0x00, 0x05, // length:4 = 5
-				0x68, 0x65, 0x6c, 0x6c, 0x6f, // 'hello'
-				0x00, // stop
-			},
-			wantReqValue: vbinary("hello"),
+				tbinary(vstruct(vfield(2, vbinary("hello"))))...,
+			),
+			wantReqFieldID:    2,
 			wantResponderType: reflect.TypeOf((*binary.EnvelopeV0StreamResponder)(nil)),
-			wantResBytes: []byte{
+			wantResBytes:      append(
 				// envelope
-				0x00, 0x00, 0x00, 0x05, // length:4 = 5
-				0x77, 0x72, 0x69, 0x74, 0x65, // 'write'
-				0x04,                   // type:1 = OneWay
-				0x00, 0x00, 0x00, 0x2a, // seqid:4 = 42
+				_testNonStrictEnvelopeOneWayBytes,
 
 				// response
-			},
+				tbinary(vstruct())...,
+			),
 		},
 		{
 			msg:          "strict envelope, envelope type Call",
 			inputEnvType: wire.Call,
-			inputReqBytes: []byte{
+			inputReqBytes: append(
 				// envelope
-				0x80, 0x01, 0x00, 0x01, // version|type:4 = 1 | call
-				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
-				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+				_testStrictEnvelopeCallBytes,
 
 				// request
-				// <struct>
-				0x0B,       // ttype:1 = BINARY
-				0x00, 0x01, // id:2 = 1
-				0x00, 0x00, 0x00, 0x05, // length:4 = 5
-				0x68, 0x65, 0x6c, 0x6c, 0x6f, // 'hello'
-				0x00, // stop
-			},
-			wantReqValue: vbinary("hello"),
+				tbinary(vstruct(vfield(3, vbinary("hello"))))...,
+			),
+			wantReqFieldID:    3,
 			wantResponderType: reflect.TypeOf((*binary.EnvelopeV1StreamResponder)(nil)),
-			wantResBytes: []byte{
+			wantResBytes:      append(
 				// envelope
-				0x80, 0x01, 0x00, 0x01, // version|type:4 = 1 | call
-				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
-				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+				_testStrictEnvelopeCallBytes,
 
 				// response
-			},
+				tbinary(vstruct())...,
+			),
 		},
 		{
-			msg:          "non-strict envelope, type Exception",
+			msg:          "non-strict envelope, envelope type Exception",
 			inputEnvType: wire.Exception,
-			inputReqBytes: []byte{
+			inputReqBytes: append(
 				// envelope
-				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
-				0x03,                   // type:1 = Exception
-				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+				_testNonStrictEnvelopeExceptionBytes,
 
 				// request
-				// <struct>
-				0x0B,       // ttype:1 = BINARY
-				0x00, 0x01, // id:2 = 1
-				0x00, 0x00, 0x00, 0x05, // length:4 = 5
-				0x68, 0x65, 0x6c, 0x6c, 0x6f, // 'hello'
-				0x00, // stop
-			},
-			wantReqValue: vbinary("hello"),
+				tbinary(vstruct(vfield(4, vbinary("hello"))))...,
+			),
+			wantReqFieldID:    4,
 			wantResponderType: reflect.TypeOf((*binary.EnvelopeV0StreamResponder)(nil)),
-			wantResBytes: []byte{
+			wantResBytes:      append(
 				// envelope
-				0x00, 0x00, 0x00, 0x03, 'a', 'b', 'c', // name~4 = "abc"
-				0x03,                   // type:1 = Exception
-				0x00, 0x00, 0x15, 0x3c, // seqID:4 = 5436
+				_testNonStrictEnvelopeExceptionBytes,
 
 				// response
-			},
+				tbinary(vstruct())...,
+			),
 		},
 	}
 
@@ -1661,15 +1660,20 @@ func TestStreamEnvelopeSuccessful(t *testing.T) {
 			require.NoError(t, err, "failed to read request with envelope")
 			require.True(t, tt.wantResponderType == reflect.TypeOf(responder), "read request should have responder want %v got %T", tt.wantResponderType, responder)
 
-			// Verify whether we can read from the request body
-			val, err := reader.ReadBinary()
-			require.NoError(t, err, "failed to read request field")
-			require.Equal(t, tt.wantReqValue.GetBinary(), val, "decoded request field bytes mismatch")
+			// Verify whether we can read the correct request field ID from the stream.Reader
+			// This is a basic test to ensure the stream.Reader is at the correct offset in the request.
+			// It is not intended to test the functionality of stream.Reader
+			require.Equal(t, tt.wantReqFieldID, readStructFieldID(t, reader), "request field ID mismatch")
 
 			// Verify response has the correct envelope
 			writer := &bytes.Buffer{}
-			_, err = responder.WriteResponseEnvelope(tt.inputEnvType, writer)
+			ws, err := responder.WriteResponseEnvelope(tt.inputEnvType, writer)
 			require.NoError(t, err, "failed to write response with envelope")
+
+			// Verify response can be written to with an empty struct
+			// This is an action executed on each test to verify stream.Writer is at the correct offset
+			require.NoError(t, ws.WriteStructBegin(), "failed to write response struct begin")
+			require.NoError(t, ws.WriteStructEnd(), "failed to write response struct end")
 			assert.Equal(t, tt.wantResBytes, writer.Bytes(), "encoded response envelope bytes mismatch")
 		})
 	}
